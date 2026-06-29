@@ -4,10 +4,9 @@ A small macOS desktop widget that doesn't just count your Jira story
 points — it nudges you toward the next productivity tier.
 
 The number on its face is how many points you've moved to Done in the
-last 90 days (or the current month). What makes it a Spwidget rather
-than another dashboard is that the widget's whole appearance — colour,
-banner, emoji rotation, even confetti — shifts as you cross each tier,
-giving the count momentum and a visible "next level" to chase.
+last 90 days (or the current month). The widget's appearance shifts as
+you cross each tier, giving the count momentum and a visible "next
+level" to chase.
 
 Built for the impact.com Product Enablement team but works against any
 Jira Cloud or Server / Data Center instance.
@@ -19,7 +18,7 @@ Jira Cloud or Server / Data Center instance.
 You start at the bottom and earn your way up. Each tier has its own
 visual treatment — the widget changes how it looks every time you cross
 a threshold, so a glance tells you where you are without reading the
-number. There are a few of them. You'll see.
+number.
 
 Thresholds are tunable per-period in the settings cog, so each user can
 calibrate the tiers to their own pace. And keep grinding past the
