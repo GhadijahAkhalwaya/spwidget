@@ -1,7 +1,7 @@
 # Spwidget
 
-A small macOS desktop widget that doesn't just count your Jira story
-points — it nudges you toward the next productivity tier.
+A small macOS desktop widget that counts your Jira story points and
+nudges you toward the next productivity tier.
 
 The number on its face is how many points you've moved to Done in the
 last 90 days (or the current month). The widget's appearance shifts as
