@@ -1,0 +1,29 @@
+# Node / Vite
+node_modules/
+dist/
+*.log
+*.timestamp-*.mjs
+
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/
+
+# Build outputs / release artefacts (rebuilt from source)
+Spwidget.app/
+Spwidget.zip
+*.dmg
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# Local environment / secrets (none are checked in, this is a safety net)
+.env
+.env.*
+*.token
+*.secret
+config.local.json

@@ -1,0 +1,929 @@
+:root {
+  color-scheme: dark;
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scale the entire widget UI by 1.4× without rewriting every px value.
+   The Tauri window dimensions in tauri.conf.json + widget.ts are also
+   bumped to 1.4× so the scaled content fits exactly. WebKit-only
+   (works fine in WKWebView). */
+html {
+  zoom: 1.4;
+}
+
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  user-select: none;
+  cursor: default;
+  overflow: hidden;
+  /* Firefox/Edge: no scrollbar gutter reservation */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+
+/* Body holds a transparent buffer on the right + bottom of the window.
+   The window is slightly wider and taller than the visible widget so the
+   rounded corners render away from the window edge-clipping artefact. */
+body {
+  padding: 0 6px 7px 0;
+  box-sizing: border-box;
+}
+
+/* WebKit: kill any phantom scrollbar gutter at root level so the
+   #app fills the whole window edge-to-edge (no clipped right/bottom). */
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+#app::-webkit-scrollbar {
+  display: none;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+#app {
+  /* Use %, NOT vw/vh — vw includes the scrollbar width in some WKWebView
+     versions which silently overflows the right edge by ~15px and clips
+     the rounded corners. */
+  width: 100%;
+  height: 100%;
+  display: flex;
+  background: rgba(20, 22, 28, 0.97);
+  color: #f4f5f7;
+  border-radius: 10px;
+  overflow: hidden;
+  /* No box-shadow, no native NSWindow shadow (shadow:false + setHasShadow:NO).
+     Body padding removed so the window matches #app exactly — no transparent
+     strips that could render as visible edge artefacts. */
+  scrollbar-width: none;
+}
+
+.widget {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 22px 12px;       /* extra right-side breathing room */
+  position: relative;
+  box-sizing: border-box;
+}
+
+.widget__points {
+  font-size: 56px;
+  font-weight: 600;
+  line-height: 1;
+  text-align: center;
+  margin-top: auto;
+  cursor: pointer;
+  letter-spacing: -1px;
+  transform: translateY(10px);
+}
+
+.widget__sub {
+  text-align: center;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #a8acb6;
+  transform: translateY(10px);
+}
+
+.widget__footer {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 9px;
+  color: #8b8f99;
+}
+
+.widget__status {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.status-fresh { background: #4ade80; }
+.status-stale { background: #f59e0b; }
+.status-error { background: #ef4444; }
+
+.widget__buttons {
+  position: absolute;
+  top: 8px;
+  right: 14px;        /* clear of the rounded-corner clip zone */
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.widget:hover .widget__buttons,
+.widget.expanded .widget__buttons {
+  opacity: 1;
+}
+
+/* Left-side window controls (close + minimize) — same visual style as
+   the right-side icon buttons, hidden until widget hover. */
+.widget__win-buttons {
+  position: absolute;
+  top: 8px;
+  left: 14px;         /* mirror the right-side spacing */
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.widget:hover .widget__win-buttons,
+.widget.expanded .widget__win-buttons {
+  opacity: 1;
+}
+
+/* Close (×) glyph renders smaller than ↻ at the same font-size,
+   bump it to harmonise with the right-side icons. */
+.icon-btn#win-close {
+  font-size: 15px;
+  font-weight: 400;
+}
+
+.icon-btn {
+  background: transparent;
+  border: none;
+  color: #a8acb6;
+  font-size: 13px;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f4f5f7;
+}
+
+/* Reload icon is visually larger than other symbols, so reduce it */
+.icon-btn#refresh {
+  font-size: 11px;
+}
+
+.issue-list {
+  margin-top: 10px;
+  font-size: 12px;
+  overflow: hidden;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 6px;
+}
+
+.issue-list__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.issue-list__title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #4a4e5e;
+}
+
+.issue-list__collapse-btn {
+  font-size: 10px;
+  padding: 2px 5px;
+  color: #6b6f7e;
+}
+
+.issue-list__empty {
+  color: #6b6f7e;
+  font-size: 12px;
+  padding: 8px 0;
+  text-align: center;
+}
+.issue-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.issue-row__key {
+  color: #8ab4f8;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.issue-row__sum {
+  flex: 1;
+  color: #c4c7cf;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.issue-row__pts {
+  color: #f4f5f7;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.setup {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  gap: 10px;
+  overflow-y: auto;
+}
+.setup h1 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.setup p.hint {
+  margin: 0;
+  font-size: 11px;
+  color: #8b8f99;
+  line-height: 1.4;
+}
+.setup label {
+  font-size: 11px;
+  color: #a8acb6;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.setup input,
+.setup select {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #f4f5f7;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+}
+.setup input:focus,
+.setup select:focus {
+  border-color: #6b8afd;
+}
+.setup button.primary {
+  background: #2563eb;
+  border: none;
+  color: white;
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  font-weight: 500;
+}
+.setup button.primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.setup .error {
+  color: #fca5a5;
+  font-size: 11px;
+  background: rgba(239, 68, 68, 0.1);
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+.setup .token-hint {
+  margin-top: 2px;
+}
+.setup .token-hint a {
+  color: #7b8cde;
+  text-decoration: none;
+  font-size: 11px;
+}
+.setup .token-hint a:hover {
+  text-decoration: underline;
+}
+
+/* ── Settings menu ─────────────────────────────────────────────────────── */
+
+.smenu {
+  display: none;
+  position: absolute;
+  top: 32px;
+  right: 10px;
+  background: rgba(22, 24, 32, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 10px;
+  padding: 10px;
+  width: 186px;
+  max-height: calc(100vh - 78px);
+  /* Scrollable via mousewheel/trackpad, but no visible scrollbar at all. */
+  overflow-y: auto;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.65);
+  z-index: 200;
+  -webkit-app-region: no-drag;
+  scrollbar-width: none;          /* Firefox/Edge */
+  -ms-overflow-style: none;
+  /* Scale the entire menu down 15% without rewriting every value.
+     All labels, pills, inputs, gaps, and the menu box itself shrink
+     together so proportions are preserved. */
+  zoom: 0.85;
+}
+
+.smenu.open { display: block; }
+
+/* WebKit: completely hide the scrollbar (no gutter, no track, no thumb). */
+.smenu::-webkit-scrollbar {
+  display: none;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.smenu__label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #4a4e5e;
+  margin-bottom: 5px;
+}
+
+.smenu__pills {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.smenu__pill {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #6b6f7e;
+  border-radius: 5px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.smenu__pill:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #c4c7cf;
+}
+
+.smenu__pill--active {
+  background: rgba(107, 138, 253, 0.18);
+  border-color: rgba(107, 138, 253, 0.45);
+  color: #8ab4f8;
+}
+
+.smenu__divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.07);
+  margin: 8px 0;
+}
+
+.smenu__thr-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+
+.smenu__thr-label {
+  font-size: 11px;
+  color: #6b6f7e;
+  flex-shrink: 0;
+}
+
+.smenu__thr-input {
+  width: 64px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 5px;
+  color: #f4f5f7;
+  font-size: 11px;
+  font-family: inherit;
+  padding: 3px 6px;
+  text-align: right;
+  outline: none;
+  -webkit-app-region: no-drag;
+}
+
+.smenu__thr-input::placeholder { color: #4a4e5e; }
+
+.smenu__thr-input:focus {
+  border-color: rgba(107, 138, 253, 0.55);
+}
+
+/* hide spin arrows */
+.smenu__thr-input::-webkit-inner-spin-button,
+.smenu__thr-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+
+.smenu__action {
+  display: block;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: #6b6f7e;
+  font-size: 11px;
+  font-family: inherit;
+  text-align: left;
+  padding: 4px 2px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.12s, color 0.12s;
+}
+
+.smenu__action:hover {
+  color: #7b7f8c;
+}
+
+@keyframes banner-fade-out {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  80% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+/* ── end settings menu ─────────────────────────────────────────────────── */
+
+/* ── Normal mode (no theme triggered) ──────────────────────────────────────
+   Subtle gold border around the widget + a matching pill-shaped border
+   around the number, plus a periodic shake every 30s as a "step it up"
+   nudge. Applied via :not() selectors when none of the mode classes are
+   present (smug-thug, boss-mode, meownster-mode). lion-roar implies
+   boss-mode so it's covered too.
+   ──────────────────────────────────────────────────────────────────────── */
+
+#app:not(.smug-thug):not(.boss-mode):not(.meownster-mode) {
+  border: 1.5px solid rgba(212, 175, 55, 0.55);
+}
+
+#app:not(.smug-thug):not(.boss-mode):not(.meownster-mode) .widget__points {
+  text-shadow:
+    0 0 8px rgba(212, 175, 55, 0.5),
+    0 0 16px rgba(212, 175, 55, 0.25);
+  -webkit-text-stroke: 0.5px rgba(212, 175, 55, 0.4);
+  padding: 4px 20px 6px;
+  align-self: center;        /* hug the number rather than fill the column */
+  margin-top: 32px;          /* more space below the buttons row */
+  /* Periodic shake: still for ~28.5s, then a brief jiggle for ~1.5s.
+     The "nudge" lives in the last 5% of the loop. */
+  animation: normal-shake 30s ease-in-out infinite;
+}
+
+@keyframes normal-shake {
+  0%, 95%, 100% { transform: translateX(0); }
+  95.5% { transform: translateX(-4px) rotate(-1deg); }
+  96.5% { transform: translateX( 4px) rotate( 1deg); }
+  97.5% { transform: translateX(-3px) rotate(-0.5deg); }
+  98.5% { transform: translateX( 3px) rotate( 0.5deg); }
+  99.5% { transform: translateX(-1px); }
+}
+
+/* ── Smug Thug Cats theme ─────────────────────────────────────────────────
+   Automatically applied when total_points > smug threshold (default 120).
+   ──────────────────────────────────────────────────────────────────────── */
+
+.smug-thug#app {
+  background: linear-gradient(
+    145deg,
+    rgba(10, 6, 22, 0.96) 0%,
+    rgba(30, 12, 4, 0.94) 100%
+  );
+  border: 1px solid rgba(212, 160, 23, 0.4);
+  box-shadow: 0 0 28px rgba(212, 160, 23, 0.14);
+  transition:
+    background 0.6s ease,
+    border-color 0.6s ease,
+    box-shadow 0.6s ease;
+}
+
+.smug-thug .widget__points {
+  color: #e6b325;
+  text-shadow:
+    0 0 16px rgba(230, 179, 37, 0.6),
+    0 0 40px rgba(230, 179, 37, 0.25);
+  animation: smug-pulse 2.8s ease-in-out infinite;
+  transition: color 0.5s ease;
+  font-size: 44px;
+  margin-top: 4px;
+}
+
+@keyframes smug-pulse {
+  0%, 100% {
+    text-shadow:
+      0 0 16px rgba(230, 179, 37, 0.6),
+      0 0 40px rgba(230, 179, 37, 0.25);
+  }
+  50% {
+    text-shadow:
+      0 0 28px rgba(230, 179, 37, 0.9),
+      0 0 60px rgba(230, 179, 37, 0.4);
+  }
+}
+
+.smug-thug .widget__sub {
+  color: #9b7726;
+  transition: color 0.5s ease;
+}
+
+.smug-thug .status-fresh {
+  background: #e6b325;
+}
+
+.smug-thug .icon-btn:hover {
+  background: rgba(230, 179, 37, 0.12);
+  color: #e6b325;
+}
+
+/* Cat banner — hidden until smug-thug fires */
+.widget__cat-banner {
+  display: none;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #e6b325;
+  margin-top: 4px;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.smug-thug .widget__cat-banner {
+  display: flex;
+  opacity: 1;
+}
+
+/* Dev mode banner at top of widget */
+.widget__dev-banner {
+  position: absolute;
+  top: 2px;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  background: rgba(107, 138, 253, 0.2);
+  border: 1px solid rgba(107, 138, 253, 0.5);
+  border-radius: 6px;
+  padding: 2px 3px;
+  font-size: 10px;
+  color: #ffffff;
+  text-align: center;
+  font-weight: 500;
+  animation: banner-fade-out 5s ease-in-out forwards;
+  line-height: 1;
+  width: fit-content;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* Cat face ASCII art element */
+.widget__cat-ascii {
+  display: none;
+  font-size: 36px;
+  text-align: center;
+  margin-top: 2px;
+  animation: cat-swagger 4s ease-in-out infinite;
+  filter: drop-shadow(0 0 6px rgba(230, 179, 37, 0.5));
+}
+
+.smug-thug .widget__cat-ascii {
+  display: block;
+}
+
+@keyframes cat-swagger {
+  0%, 100% { transform: rotate(-2deg) scale(1); }
+  25% { transform: rotate(2deg) scale(1.04); }
+  50% { transform: rotate(-1deg) scale(1.02); }
+  75% { transform: rotate(3deg) scale(1.04); }
+}
+
+/* ── end smug thug ────────────────────────────────────────────────────── */
+
+/* ── Boss Mode (> boss threshold, default 135 pts) ─────────────────────── */
+
+.boss-mode#app {
+  background: linear-gradient(
+    145deg,
+    rgba(12, 0, 22, 0.97) 0%,
+    rgba(28, 4, 4, 0.97) 50%,
+    rgba(8, 0, 28, 0.97) 100%
+  );
+  border: 1px solid rgba(255, 80, 0, 0.65);
+  box-shadow: 0 0 50px rgba(255, 80, 0, 0.18);
+  animation: boss-glow 2.4s ease-in-out infinite;
+  transition:
+    background 0.6s ease,
+    border-color 0.6s ease,
+    box-shadow 0.6s ease;
+}
+
+@keyframes boss-glow {
+  0%, 100% {
+    border-color: rgba(255, 80, 0, 0.65);
+    box-shadow: 0 0 50px rgba(255, 80, 0, 0.18);
+  }
+  33% {
+    border-color: rgba(220, 0, 180, 0.65);
+    box-shadow: 0 0 50px rgba(220, 0, 180, 0.18);
+  }
+  66% {
+    border-color: rgba(80, 0, 255, 0.65);
+    box-shadow: 0 0 50px rgba(80, 0, 255, 0.18);
+  }
+}
+
+.boss-mode .widget__points {
+  font-size: 44px;
+  margin-top: 4px;
+  background: linear-gradient(90deg, #ff6b6b 0%, #ffd700 25%, #00cfff 50%, #ff69b4 75%, #ff6b6b 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: boss-rainbow 3s linear infinite, boss-pulse 1.8s ease-in-out infinite;
+  text-shadow: none;
+}
+
+@keyframes boss-rainbow {
+  0%   { background-position: 0% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes boss-pulse {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.05); }
+}
+
+.boss-mode .widget__sub {
+  color: #ff8c42;
+  transition: color 0.5s ease;
+}
+
+.boss-mode .widget__cat-banner {
+  display: flex;
+  opacity: 1;
+  animation: boss-banner 2.4s ease-in-out infinite;
+}
+
+@keyframes boss-banner {
+  0%, 100% { color: #ff6b6b; }
+  33%       { color: #ffd700; }
+  66%       { color: #da70d6; }
+}
+
+.boss-mode .widget__cat-ascii {
+  display: block;
+  filter: drop-shadow(0 0 8px rgba(255, 100, 0, 0.75));
+  animation: cat-swagger 3s ease-in-out infinite;
+}
+
+.boss-mode .status-fresh {
+  background: #ff6b6b;
+}
+
+.boss-mode .icon-btn:hover {
+  background: rgba(255, 80, 0, 0.15);
+  color: #ff8c42;
+}
+
+/* ── end extreme boss mode ─────────────────────────────────────────────── */
+
+/* ── Meownster Mode (Motivate format + on-track pace) ────────────────────
+   Background slowly drifts through a dopamine-friendly pastel rainbow.
+   ──────────────────────────────────────────────────────────────────────── */
+
+.meownster-mode#app {
+  background: linear-gradient(
+    -45deg,
+    rgba(255, 120, 210, 0.93),
+    rgba(130,  60, 230, 0.93),
+    rgba( 60, 200, 240, 0.93),
+    rgba(255, 230,  80, 0.93),
+    rgba(100, 220, 160, 0.93),
+    rgba(200, 100, 255, 0.93)
+  );
+  background-size: 500% 500%;
+  /* Border + glow in the boss-mode style, but cycling between yellow
+     and green instead of orange. Slightly thicker than boss-mode's 1px
+     because the bright pastel background makes the border read as
+     fainter than the same width on boss-mode's dark background. */
+  border: 1.5px solid rgba(255, 220, 60, 0.85);
+  box-shadow: 0 0 50px rgba(180, 230, 80, 0.22);
+  animation:
+    meownster-drift 28s ease infinite,
+    meownster-border-glow 5s ease-in-out infinite;
+}
+
+@keyframes meownster-drift {
+  0%   { background-position:   0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position:   0% 50%; }
+}
+
+@keyframes meownster-border-glow {
+  0%, 100% {
+    border-color: rgba(255, 220, 60, 0.85);     /* yellow */
+    box-shadow: 0 0 50px rgba(255, 220, 60, 0.22);
+  }
+  50% {
+    border-color: rgba(120, 230, 100, 0.85);    /* green */
+    box-shadow: 0 0 50px rgba(120, 230, 100, 0.28);
+  }
+}
+
+.meownster-mode .widget__points {
+  color: #1a0535;
+  /* Slightly smaller than the default 56px to compensate for the heavy
+     white-glow text-shadow that visually thickens the digits. */
+  font-size: 50px;
+  margin-top: 14px;
+  text-shadow:
+    0 0 10px rgba(255, 255, 255, 0.9),
+    0 0 22px rgba(210, 120, 255, 0.55);
+  /* Combined glow + scale pulse, synced to the meownster emoji float
+     (6.4s cycle) so the number breathes at the same dreamy pace. */
+  animation:
+    meownster-pulse 6.4s ease-in-out infinite,
+    boss-pulse 6.4s ease-in-out infinite;
+}
+
+@keyframes meownster-pulse {
+  0%, 100% {
+    text-shadow:
+      0 0 10px rgba(255, 255, 255, 0.9),
+      0 0 22px rgba(210, 120, 255, 0.55);
+  }
+  50% {
+    text-shadow:
+      0 0 14px rgba(255, 255, 255, 1.0),
+      0 0 34px rgba(180, 90, 255, 0.75);
+  }
+}
+
+.meownster-mode .widget__sub {
+  color: rgba(20, 5, 45, 0.85);
+  transform: translateY(4px);
+}
+
+.meownster-mode .widget__footer {
+  color: rgba(20, 5, 45, 0.75);
+}
+
+/* Buttons: dark so they read on any pastel stop */
+.meownster-mode .icon-btn {
+  color: rgba(20, 5, 45, 0.80);
+  text-shadow: none;
+}
+
+.meownster-mode .widget__cat-banner {
+  display: flex;
+  opacity: 1;
+  color: #1a0535;
+  text-shadow:
+    0 0 8px rgba(255, 255, 255, 0.90),
+    0 0 18px rgba(210, 120, 255, 0.50);
+  animation: meownster-shimmer 6s ease-in-out infinite;
+}
+
+@keyframes meownster-shimmer {
+  0%, 100% { opacity: 0.85; letter-spacing: 0.12em; }
+  50%       { opacity: 1.00; letter-spacing: 0.16em; }
+}
+
+.meownster-mode .widget__cat-ascii {
+  display: block;
+  /* Visually shift the emoji 10px down without affecting layout, so the
+     points number below stays at its original Y position.
+     `position: relative` + `top` ≠ margin-top: it doesn't push siblings. */
+  position: relative;
+  top: 10px;
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.6));
+  animation: meownster-float 6.4s ease-in-out infinite;
+}
+
+/* Original float animation restored (translateY combines with the static
+   `top: 10px` shift above, so the emoji floats around the new baseline). */
+@keyframes meownster-float {
+  0%, 100% { transform: translateY(0)    scale(1);    }
+  50%       { transform: translateY(-4px) scale(1.1); }
+}
+
+/* ── 🦁 Lion-roar easter egg ────────────────────────────────────────────
+   Triggers when SP tally is 10 points above the boss threshold.
+   The rotator locks to 🦁 and grows huge with a heavy pulsation. */
+.lion-roar .widget__cat-ascii {
+  font-size: 90px !important;
+  margin-top: 8px;
+  animation: lion-roar-pulse 1.4s ease-in-out infinite !important;
+  filter: drop-shadow(0 0 14px rgba(255, 180, 50, 0.8))
+          drop-shadow(0 0 36px rgba(255, 90, 30, 0.55));
+}
+
+.lion-roar .widget__cat-banner {
+  color: #ffb84d;
+  text-shadow: 0 0 10px rgba(255, 140, 40, 0.7);
+  animation: lion-banner-flicker 1.4s ease-in-out infinite;
+}
+
+@keyframes lion-roar-pulse {
+  0%, 100% { transform: scale(1)    rotate(0deg);   }
+  25%       { transform: scale(1.18) rotate(-3deg);  }
+  50%       { transform: scale(1.28) rotate(0deg);   }
+  75%       { transform: scale(1.18) rotate(3deg);   }
+}
+
+@keyframes lion-banner-flicker {
+  0%, 100% { opacity: 0.85; letter-spacing: 0.06em; }
+  50%       { opacity: 1.00; letter-spacing: 0.10em; }
+}
+
+.meownster-mode .icon-btn:hover {
+  background: rgba(20, 5, 45, 0.12);
+  color: #1a0535;
+}
+
+/* ── end meownster mode ──────────────────────────────────────────────────── */
+
+/* ── Hibernation — grey out after 5 min of system idle ───────────────── */
+#app {
+  transition: opacity 1.5s ease, filter 1.5s ease;
+}
+#app.hibernating {
+  opacity: 0.35;
+  filter: grayscale(0.7) brightness(0.65);
+}
+/* ── end hibernation ──────────────────────────────────────────────────── */
+
+/* ── Shrink mode — restore larger font sizes for footer, buttons, and menus
+   When zoom is 1.0 (shrink mode), we need to undo the size reductions we made
+   for expand mode so text remains readable. */
+#app.shrink-mode .widget__footer {
+  font-size: 11px;
+}
+
+#app.shrink-mode .icon-btn {
+  font-size: 18px;
+}
+
+#app.shrink-mode #refresh {
+  font-size: 15px;
+}
+
+#app.shrink-mode #win-resize {
+  font-size: 15px;
+}
+
+#app.shrink-mode .smenu__label {
+  font-size: 13px;
+}
+
+#app.shrink-mode .smenu__pill {
+  font-size: 14px;
+}
+
+#app.shrink-mode .smenu__thr-label {
+  font-size: 14px;
+}
+
+#app.shrink-mode .smenu__thr-input {
+  font-size: 14px;
+}
+
+#app.shrink-mode .smenu__action {
+  font-size: 14px;
+}
+
+#app.shrink-mode .smenu__divider {
+  height: 2px;
+}
+
+/* ── end shrink mode ───────────────────────────────────────────────────── */
+
+[data-tauri-drag-region] {
+  -webkit-app-region: drag;
+}
+button,
+input,
+select,
+a,
+.widget__points,
+.issue-list,
+.icon-btn {
+  -webkit-app-region: no-drag;
+}
