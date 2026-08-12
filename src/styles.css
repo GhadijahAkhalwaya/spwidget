@@ -90,6 +90,75 @@ body::-webkit-scrollbar,
   transform: translateY(10px);
 }
 
+/* ── Pace bar ──────────────────────────────────────────────────────────────
+   Fill = points so far. Bright marker = the ideal number for right now
+   (working-days elapsed × Thug threshold). Faint tick = Thug threshold.
+   Bar spans 0 → Meownster threshold. The numeric label under the marker is
+   absolutely positioned so it costs no layout height — important because
+   meownster mode has very little vertical slack. */
+.widget__pace {
+  /* 5px, not more: points/sub carry translateY(10px) but the footer does not,
+     so the usable visual gap between sub and footer is only ~11-16px in the
+     tight modes (smug/boss/meownster). 5px leaves clearance on both sides. */
+  margin-top: 5px;
+  transform: translateY(10px);
+  /* Hidden by default to keep the face uncluttered — revealed on hover.
+     opacity (not display) so the reserved space never shifts the layout. */
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.widget:hover .widget__pace {
+  opacity: 1;
+}
+
+.widget__pace-track {
+  position: relative;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.10);
+}
+
+.widget__pace-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: #d4af37;
+  transition: width 0.6s ease, background 0.6s ease;
+}
+
+/* Thug threshold tick */
+.widget__pace-milestone {
+  position: absolute;
+  top: -2px;
+  width: 1px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.30);
+}
+
+/* "You should be here" marker */
+.widget__pace-marker {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  width: 2px;
+  height: 10px;
+  border-radius: 1px;
+  background: #f4f5f7;
+  transition: left 0.6s ease, background 0.6s ease;
+}
+
+/* Ideal-now readout — sits in the footer's middle slot (see widget.ts) */
+.widget__pace-text {
+  font-variant-numeric: tabular-nums;
+  opacity: 0;
+  transition: color 0.5s ease, opacity 0.25s ease;
+}
+.widget:hover .widget__pace-text {
+  opacity: 1;
+}
+.widget__pace-text--ahead  { color: #6fcf87; }
+.widget__pace-text--behind { color: #e0a45c; }
+
 .widget__footer {
   margin-top: auto;
   display: flex;
@@ -752,7 +821,9 @@ body::-webkit-scrollbar,
   /* Slightly smaller than the default 56px to compensate for the heavy
      white-glow text-shadow that visually thickens the digits. */
   font-size: 50px;
-  margin-top: 14px;
+  /* 8px rather than 14px — the pace bar below needs the vertical slack, and
+     meownster is the tallest layout (banner + emoji + big number). */
+  margin-top: 8px;
   text-shadow:
     0 0 10px rgba(255, 255, 255, 0.9),
     0 0 22px rgba(210, 120, 255, 0.55);
@@ -859,6 +930,33 @@ body::-webkit-scrollbar,
 }
 
 /* ── end meownster mode ──────────────────────────────────────────────────── */
+
+/* ── Pace bar: per-mode colours ──────────────────────────────────────────── */
+.smug-thug .widget__pace-fill { background: #e6b325; }
+.smug-thug .widget__pace-track { background: rgba(230, 179, 37, 0.16); }
+
+.boss-mode .widget__pace-fill { background: #ff8c42; }
+.boss-mode .widget__pace-track { background: rgba(255, 140, 66, 0.16); }
+
+.lion-roar .widget__pace-fill { background: #ffb347; }
+
+/* Meownster runs a bright pastel background — invert to dark ink so the bar
+   stays legible against every gradient stop. */
+/* Meownster shifts .widget__sub by only 4px (not 10px), so the bar has to
+   match or it drifts down into the footer. */
+.meownster-mode .widget__pace { transform: translateY(4px); }
+
+.meownster-mode .widget__pace-track    { background: rgba(20, 5, 45, 0.14); }
+.meownster-mode .widget__pace-fill     { background: rgba(20, 5, 45, 0.55); }
+.meownster-mode .widget__pace-milestone{ background: rgba(20, 5, 45, 0.30); }
+.meownster-mode .widget__pace-marker   { background: #1a0535; }
+.meownster-mode .widget__pace-text--ahead  { color: #1d6b32; }
+.meownster-mode .widget__pace-text--behind { color: #8a5310; }
+
+/* Shrink mode runs at zoom 1.0, so bump the bar up to stay legible */
+#app.shrink-mode .widget__pace-track  { height: 5px; }
+#app.shrink-mode .widget__pace-marker { height: 11px; }
+
 
 /* ── Hibernation — grey out after 5 min of system idle ───────────────── */
 #app {

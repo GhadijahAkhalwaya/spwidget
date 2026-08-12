@@ -22,9 +22,12 @@ import type { RefreshFailed, Snapshot } from "../types";
 const EXPANDED = new LogicalSize(400, 287);
 const SHRINK   = new LogicalSize(286, 205);
 
+// `boss` is the top tier (Meownster) — i.e. the productivity goal.
+// Benchmark: quarter goal 135, month goal 46. `smug` is the lower "Thug"
+// tier, kept at ~87% of the goal so tier spacing stays proportional.
 const THRESHOLDS = {
   days90:  { smug: 120, boss: 135 },
-  monthly: { smug: 39,  boss: 45  },
+  monthly: { smug: 40,  boss: 46  },
 } as const;
 
 const SMUG_CATS      = ["😼", "😤", "🐱", "😾", "🙀", "😹"];
@@ -219,13 +222,36 @@ export async function renderWidget(root: HTMLElement) {
   sub.textContent = "loading…";
   widget.append(sub);
 
+  // Pace bar — fill is where you are, the bright marker is where you should
+  // be right now, the faint tick is the Thug threshold.
+  const pace = document.createElement("div");
+  pace.className = "widget__pace";
+  pace.innerHTML = `
+    <div class="widget__pace-track">
+      <div class="widget__pace-fill" id="pace-fill"></div>
+      <div class="widget__pace-milestone" id="pace-milestone"></div>
+      <div class="widget__pace-marker" id="pace-marker"></div>
+    </div>
+  `;
+  widget.append(pace);
+
+  const paceFill      = pace.querySelector<HTMLElement>("#pace-fill")!;
+  const paceMilestone = pace.querySelector<HTMLElement>("#pace-milestone")!;
+  const paceMarker    = pace.querySelector<HTMLElement>("#pace-marker")!;
+
   const footer = document.createElement("div");
   footer.className = "widget__footer";
+  // The ideal-now number lives in the footer's spare middle slot rather than
+  // floating under the bar — the widget has almost no vertical slack and a
+  // label pinned below the track collided with this row.
   footer.innerHTML = `
     <span><span id="status-dot" class="widget__status status-stale"></span><span id="status-text">—</span></span>
+    <span id="pace-text" class="widget__pace-text"></span>
     <span id="updated">—</span>
   `;
   widget.append(footer);
+
+  const paceText = footer.querySelector<HTMLElement>("#pace-text")!;
 
   // ── State ──────────────────────────────────────────────────────────────
   let issuesEl: HTMLElement | null = null;
@@ -254,6 +280,38 @@ export async function renderWidget(root: HTMLElement) {
     smug: customThr[mode].smug ?? THRESHOLDS[mode].smug,
     boss: customThr[mode].boss ?? THRESHOLDS[mode].boss,
   });
+
+  // ── Pace bar ────────────────────────────────────────────────────────────
+  // How much of the current period has elapsed, in working days.
+  // A rolling 90-day window is always "complete", so the ideal there is
+  // simply the full Thug threshold.
+  const paceFraction = (): number => {
+    if (currentMode !== "monthly") return 1;
+    const now = new Date();
+    const totalWD   = workingDaysInMonth(now.getFullYear(), now.getMonth());
+    const elapsedWD = workingDaysUpTo(now.getFullYear(), now.getMonth(), now.getDate());
+    return totalWD === 0 ? 0 : Math.min(1, elapsedWD / totalWD);
+  };
+
+  const updatePace = (totalPoints: number) => {
+    const thr    = getEffThr(currentMode);
+    const barMax = Math.max(thr.boss, 1);
+    const ideal  = paceFraction() * thr.smug;
+    const pct    = (v: number) => Math.max(0, Math.min(100, (v / barMax) * 100));
+
+    paceFill.style.width      = `${pct(totalPoints)}%`;
+    paceMilestone.style.left   = `${pct(thr.smug)}%`;
+    paceMarker.style.left      = `${pct(ideal)}%`;
+
+    const idealRounded = Math.round(ideal);
+    const delta        = Math.round(totalPoints - ideal);
+    paceText.textContent = `ideal ${idealRounded}`;
+    paceText.classList.toggle("widget__pace-text--ahead",  delta >= 0);
+    paceText.classList.toggle("widget__pace-text--behind", delta < 0);
+    pace.title = delta >= 0
+      ? `${formatPoints(totalPoints)} pts — ${delta} ahead of pace (ideal now ${idealRounded}, Thug at ${thr.smug}, Meownster at ${thr.boss})`
+      : `${formatPoints(totalPoints)} pts — ${Math.abs(delta)} behind pace (ideal now ${idealRounded}, Thug at ${thr.smug}, Meownster at ${thr.boss})`;
+  };
 
   // ── Settings menu helpers ───────────────────────────────────────────────
   const setMenuOpen = (open: boolean) => {
@@ -349,6 +407,8 @@ export async function renderWidget(root: HTMLElement) {
     widget.classList.toggle("smug-thug",      isSmug);
     widget.classList.toggle("meownster-mode", isMeownster);
     widget.classList.toggle("lion-roar",      isLionRoar);
+
+    updatePace(totalPoints);
 
     // Update subtext based on currently-active mode (themeOverride aware)
     if (lastSnapshot) {
@@ -599,6 +659,9 @@ export async function renderWidget(root: HTMLElement) {
   // ── Initial load ────────────────────────────────────────────────────────
   try { currentMode = await getMode(); } catch { /* ignore, default days90 */ }
   syncPills();
+  // Seed the bar so the ideal-now figure is on screen before the first
+  // refresh lands (applyTheme overwrites it as soon as data arrives).
+  updatePace(0);
 
   try {
     const cached = await getPoints();
@@ -617,12 +680,39 @@ export async function renderWidget(root: HTMLElement) {
   // Save user-initiated drags so they survive hibernation. Skip moves that
   // happen while hibernating — those are macOS shifts, not user intent.
   let movedTimer: number | null = null;
+  let lastMoveEventAt = 0;
   unsubs.push(await win.onMoved(() => {
+    lastMoveEventAt = Date.now();
     if (hibernating) return;
     if (movedTimer !== null) window.clearTimeout(movedTimer);
     // Debounce so a single drag (which fires many move events) only writes once.
     movedTimer = window.setTimeout(() => { void savePosition(); }, 150);
   }));
+
+  // Watchdog: macOS occasionally relocates the window on its own (e.g.
+  // multi-monitor re-arrangement, display sleep/wake, Space changes) without
+  // any explicit user drag. Periodically check the saved vs. actual position
+  // and snap back if they've drifted apart. Guarded so it never fights an
+  // in-progress drag — onMoved keeps firing during a drag, so we skip the
+  // check unless things have been quiet for >2s (by then the debounced
+  // savePosition above has already synced the saved position, so no
+  // discrepancy is found and nothing happens).
+  const positionWatchdog = window.setInterval(() => {
+    void (async () => {
+      if (hibernating) return;
+      if (Date.now() - lastMoveEventAt < 2000) return;
+      try {
+        const raw = localStorage.getItem(POS_KEY);
+        if (!raw) return;
+        const { x, y } = JSON.parse(raw);
+        if (typeof x !== "number" || typeof y !== "number") return;
+        const cur = await win.outerPosition();
+        if (Math.abs(cur.x - x) > 2 || Math.abs(cur.y - y) > 2) {
+          await restorePosition();
+        }
+      } catch { /* ignore */ }
+    })();
+  }, 10_000);
 
   updatedTimer = window.setInterval(() => setUpdated(lastSnapshot), 60_000);
 
@@ -735,6 +825,7 @@ export async function renderWidget(root: HTMLElement) {
       if (updatedTimer) window.clearInterval(updatedTimer);
       if (catTimer) window.clearInterval(catTimer);
       if (hibernateTimer !== null) window.clearTimeout(hibernateTimer);
+      window.clearInterval(positionWatchdog);
       observer.disconnect();
     }
   });
